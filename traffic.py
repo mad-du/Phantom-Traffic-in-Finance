@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 road_length : int = 100
 max_speed : int = 5
 p_rule3 : float = 0.3
-nb_steps : int = 1000
-
+nb_steps : int = 5 #Change back to 1000 after testing
 
 def new_road(road : np.ndarray) -> np.ndarray:
     '''
@@ -58,15 +57,35 @@ for nb_cars in range(1,50):
 
     avg_velocities : list = []
 
-    for i in range(50):
+    for i in range(5): #Change back to 50 after testing
         road = np.full(road_length, -1)
         positions = np.random.choice(road_length, nb_cars, replace=False)
         init_speeds = np.random.randint(0, max_speed + 1, nb_cars)
         road[positions] = init_speeds
 
-        road_history = [road.copy()]
+        vehicle_positions : list = []
+        speeds : list = []
+        for i in range(road_length):
+            if road[i] != -1:
+                vehicle_positions.append(i)
+                speeds.append(road[i])
+
+        road_history : list = [road.copy()]
+        positions_history : list = [vehicle_positions.copy()]
+        speeds_history : list = [speeds.copy()]
+
         for step in range(nb_steps):
             road = new_road(road)
+
+            for cars in range(len(vehicle_positions)):
+                i = vehicle_positions[cars]
+                while road[i] == -1:
+                    i = (i + 1) % road_length
+                vehicle_positions[cars] = i
+                speeds[cars] = road[i]
+
+            positions_history.append(vehicle_positions.copy())
+            speeds_history.append(speeds.copy())
             road_history.append(road.copy())
 
         avg_velocity = average_velocity(np.array(road_history), grace_period=10)
@@ -74,14 +93,41 @@ for nb_cars in range(1,50):
 
     avg_velocities_nbcars.append(np.mean(avg_velocities).item())
 
-print(avg_velocities_nbcars)
-
 densities = np.array([nb_cars / road_length for nb_cars in range(1, 50)])
 
-fig, ax = plt.subplots()
-ax.plot(densities, avg_velocities_nbcars)
-ax.set_xlabel('Density')
-ax.set_ylabel('Average velocity')
+speeds_array = np.array(speeds_history)
 
-plt.savefig('densities_avgvelocities.png', dpi=300)
-plt.show()
+def lagged_correlation(leader_speeds : np.ndarray, follower_speeds : np.ndarray, lag: int):
+    '''
+    This function takes the speeds of the leading and following vehicles as input, along with a lag value, and returns the lagged correlation between the two speed arrays.
+    '''
+
+    T = len(leader_speeds)
+
+    leader_slice = leader_speeds[0: T-lag]
+    follower_slice = follower_speeds[lag:T]
+
+    return np.corrcoef(leader_slice, follower_slice)[0, 1] # Calculates correlation coefficient between the two slices of the speed arrays, thus giving us a value between -1 and 1.
+
+def peak_lagged_correlation(leader_speeds, follower_speeds, max_lag):
+    correlations = []
+    for lag in range(0, max_lag):
+        correlations.append(lagged_correlation(leader_speeds, follower_speeds, lag))
+    correlations = np.array(correlations)
+    peak_lag = np.argmax(correlations)  
+    peak_value = correlations[peak_lag]
+    return peak_lag, peak_value
+
+'''
+for t in range(len(road_history)):
+    for cars in range(len(vehicle_positions)):
+        pos = positions_history[t][cars]
+        assert speeds_history[t][cars] == road_history[t][pos], \
+            f"Mismatch at t={t}, car={cars}: speeds_history says {speeds_history[t][cars]}, " \
+            f"but road_history[{t}][{pos}] = {road_history[t][pos]}"
+
+print("All speeds_history entries match road_history lookups — consistent.")
+'''
+
+print(speeds_array[:, 2])
+print(speeds_array[:, 1])
