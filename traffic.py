@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -140,6 +141,13 @@ for nb_cars in range(2,50):
 
 
 densities = np.array([nb_cars / road_length for nb_cars in range(2, 50)])
+
+os.makedirs('data', exist_ok=True)
+np.savez('data/phase1_sweep.npz',
+         densities=densities,
+         avg_velocities=np.array(avg_velocities_nbcars),
+         correlation_strengths=np.array(correlation_strengths_nbcars),
+         defined_fractions=np.array(defined_fractions_nbcars))
 
 
 '''
