@@ -50,7 +50,7 @@ That said, in order to properly model this propagating stop-and-go effect and de
 
 #### Lagged-Correlation Measure
 
-If a vehicle breaks, then after a certain time interval, the vehicle behind it would break too, which causes the one behind it to break, etc... This is the propagation effect that we can see thanks to the waves in the graph of the NaSch simulation. Using the covariance, we are able to precisely capture how a vehicle's change in speed affects adjacent vehicles' change in speed. The key here is that we are offsetting the following vehicle's speed data by a few time interval as it doesn't update instantaneously as per the rules of our simulation. As well, the covariance can vary a lot from one pair of vehicle to another, depending on various factors. As such, normalizing the covariance between -1 and 1 by taking the correlation coefficient between pairs of vehicles allow for a much easier understanding of this statistical measure.
+If a vehicle brakes, then after a certain time interval, the vehicle behind it would brakes too, which causes the one behind it to brakes, etc... This is the propagation effect that we can see thanks to the waves in the graph of the NaSch simulation. Using the covariance, we are able to precisely capture how a vehicle's change in speed affects adjacent vehicles' change in speed. The key here is that we are offsetting the following vehicle's speed data by a few time interval as it doesn't update instantaneously as per the rules of our simulation. As well, the covariance can vary a lot from one pair of vehicle to another, depending on various factors. As such, normalizing the covariance between -1 and 1 by taking the correlation coefficient between pairs of vehicles allow for a much easier understanding of this statistical measure.
 
 Just like for the average velocity, in order to determine the density threshold of our model, we sweep through different numbers of cars on the road, therefore different densities, with many iterations per density to average out any statistical anomaly due to the probabilistic nature of our model, and calculate the correlation strength for each run. As we intend to use this measure further down, we'd want to be precise on what the critical density $\rho_c$ is, and what the confidence interval for $\rho_c$ is. To determine $\rho_c$, we actually use a neat method that I learned from Chemistry. 
 
@@ -60,3 +60,5 @@ In order to determine the confidence interval, we can simulate different runs by
 
 The following graph is what we obtained thanks to our sweeping.
 ![Average Velocity and Lagged-Correlation = f(Density)](graphs/fundamental_and_correlation.png)
+
+We have $\rho_c = 0.115$ and $CI = [0.115,0.125]$
