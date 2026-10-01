@@ -22,28 +22,41 @@ In order to study the limits of such a model, notably at what point do cars caus
 
 Before trusting proceeding statistical measurements, the simulation was first validated with two scenarios. First, if $p = 0$, the simulation would be entirely deterministic, vehicles would move at fixed speeds after accelerating to the maximum velocity. 
 
-![Nagel-Schreckenberg model, p=0](https://github.com/mad-du/Phantom-Traffic-in-Finance/blob/main/graphs/nasch_graph_p0.png)
+![Nagel-Schreckenberg model, p=0](graphs/nasch_graph_p0.png)
 
 Setting $p = 0.3$, we obtain a graph which show the propagating stop-and-go effect that you can expect from the Nagel-Schreckenberg model.
 
-![Nagel-Schreckenberg model, p=0.3](https://github.com/mad-du/Phantom-Traffic-in-Finance/blob/main/graphs/nasch_graph_p03.png)
+![Nagel-Schreckenberg model, p=0.3](graphs/nasch_graph_p03.png)
 
 #### Choosing the burn-in grace period
 
 Considering the random nature of each vehicle's assigned velocity, it is perhaps wise to do our statistical measurements after a given grace period for it to reach its steady-state behavior. To do this, we can model the average of the average velocity at the vehicles on the road at each timestep for a large number of simulations, thus giving us a more accurate idea of when the transient is resolved, as one single simulation, affected by randomness, can not possibly be representative.
 
-![Grace Period Determination](https://github.com/mad-du/Phantom-Traffic-in-Finance/blob/main/graphs/grace_period.png)
+![Grace Period Determination](graphs/grace_period.png)
 
 We observe that the transient resolves within approximately the first 15 steps. We can confirm this by calculating the average velocities between 15-30, 30-100 and 200-400 to determine that they are very close.
 
 #### Average Velocity vs Density
 
-Sweeping density $p = N/L$ (by varying vehicle count $N$ for a fixed track length $L$) and measuring post grace-period average velocity, averaged across 50 independent runs per density for more reliable data, we have the following graph of the average velocity as a function of density.
+Sweeping density $\rho = N/L$ (by varying vehicle count $N$ for a fixed track length $L$) and measuring post grace-period average velocity, averaged across 50 independent runs per density for more reliable data, we have the following graph of the average velocity as a function of density.
 
-![Average velocity = f(density)](https://github.com/mad-du/Phantom-Traffic-in-Finance/blob/main/graphs/densities_avgvelocities.png)
+![Average velocity = f(density)](graphs/densities_avgvelocities.png)
 
 #### Limitation
 
-Average velocity dropping is consistent with phantom jam formation but it does nto allow us to directly graph the propagating stop-and-go waves that we are looking to observe both on the roads, and in the financial markets. Notice that, by looking at the graph of velocity over the time steps, we can indeed deduce that this stop-and-go effect happens. Even after the transient state, the average velocity would appear to fluctuate a lot, suggesting that vehicles slow down, causing traffic, before speeding up and repeating this cycle.
+Average velocity dropping is consistent with phantom jam formation but it does not allow us to directly graph the propagating stop-and-go waves that we are looking to observe both on the roads, and in the financial markets. Notice that, by looking at the graph of velocity over the time steps, we can indeed deduce that this stop-and-go effect happens. Even after the transient state, the average velocity would appear to fluctuate a lot, suggesting that vehicles slow down, causing traffic, before speeding up and repeating this cycle.
 
 That said, in order to properly model this propagating stop-and-go effect and determine the threshold for which the density of the road dramatically increases the effect, we would need a statistical measurement that would capture a vehicle's behavior in comparison to the one in front of it, a statistical measurement that tells us how 2 objects change relative to one another, like the Covariance...
+
+#### Lagged-Correlation Measure
+
+If a vehicle breaks, then after a certain time interval, the vehicle behind it would break too, which causes the one behind it to break, etc... This is the propagation effect that we can see thanks to the waves in the graph of the NaSch simulation. Using the covariance, we are able to precisely capture how a vehicle's change in speed affects adjacent vehicles' change in speed. The key here is that we are offsetting the following vehicle's speed data by a few time interval as it doesn't update instantaneously as per the rules of our simulation. As well, the covariance can vary a lot from one pair of vehicle to another, depending on various factors. As such, normalizing the covariance between -1 and 1 by taking the correlation coefficient between pairs of vehicles allow for a much easier understanding of this statistical measure.
+
+Just like for the average velocity, in order to determine the density threshold of our model, we sweep through different numbers of cars on the road, therefore different densities, with many iterations per density to average out any statistical anomaly due to the probabilistic nature of our model, and calculate the correlation strength for each run. As we intend to use this measure further down, we'd want to be precise on what the critical density $\rho_c$ is, and what the confidence interval for $\rho_c$ is. To determine $\rho_c$, we actually use a neat method that I learned from Chemistry. 
+
+During a titration, in order to determine which volume of the titrating solution was necessary to entirely consume the solution that is being titrated, we can rely on many methods and in particular, the one I enjoyed the most, was pH-level monitoring. The critical volume corresponded to the volume at which the pH of the solution jumped the most. Mathematically, this is when the derivative of $pH = f(t)$ is an extremum. We do the same in order to determine what the critical density is. Thanks to my training in competitive High School Chemistry, looking at the graph and the sweeping, it mirrored a titration so conveniently that using this to determine $\rho_c$ was almost instinctive.
+
+In order to determine the confidence interval, we can simulate different runs by randomly choosing 50 of the 50 independent runs per density. Of course, this would imply that an independent run can be repeated, otherwise it would be the same 50 independent runs from the beginning. We then determine $\rho_c$ with this new randomized set of runs, repeating this over a large number of times and taking the 2.5th percentile as our lower bound, and the 97.5th percentile as our upper bound, giving us a confidence interval of 95%. This has the notable time advantage of not having to re-simulate hundreds of time in order to determine the CI. Note that each sweep runs roughly 2400 simulations which takes roughly 2 minutes to compute. We ran 500 simulated independent runs to determine CI, if we had to do the sweep again every single time, that is a lot of minutes!
+
+The following graph is what we obtained thanks to our sweeping.
+![Average Velocity and Lagged-Correlation = f(Density)](graphs/fundamental_and_correlation.png)
