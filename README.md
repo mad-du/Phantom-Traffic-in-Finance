@@ -40,7 +40,7 @@ We observe that the transient resolves within approximately the first 15 steps. 
 
 Sweeping density $\rho = N/L$ (by varying vehicle count $N$ for a fixed track length $L$) and measuring post grace-period average velocity, averaged across 50 independent runs per density for more reliable data, we have the following graph of the average velocity as a function of density.
 
-![Average velocity = f(density)](graphs/densities_avgvelocities.png)
+![Average velocity gi= f(density)](graphs/densities_avgvelocities.png)
 
 #### Limitation
 
