@@ -62,3 +62,42 @@ The following graph is what we obtained thanks to our sweeping.
 ![Average Velocity and Lagged-Correlation = f(Density)](graphs/fundamental_and_correlation.png)
 
 We have $\rho_c = 0.115$ and $CI = [0.115,0.125]$
+
+## Phase 2 : From traffic to the order book
+
+Phase 1 gave us a tipping point: below $\rho_c$ cars barely influence one another, and above it a slowdown ripples backwards through the traffic. Phase 2 asks whether a simulated limit order book shows the same kind of tipping point when liquidity providers react to one another.
+
+#### The simulated order book
+
+A single-asset limit order book with integer price ticks, a FIFO queue at each price (price-time priority), and limit, market and cancel orders. Every operation re-checks the book's invariants (no crossed book, no empty price levels, volume conserved), and the matching engine is tested against a deliberately naive reference implementation on thousands of random events. Events arrive at random: limit orders at rate $\lambda$, market orders at rate $\mu$, and each resting order is cancelled at rate $\theta$.
+
+#### Mapping traffic onto the order book
+
+| Traffic | Order book |
+|---|---|
+| cars | price levels, ranked by distance from the best price (level 0 is the touch) |
+| car speed | change in depth at a level over a window of 50 events |
+| density $\rho = N/L$ | load $\rho = \mu / \lambda$ : market orders (taking liquidity) per limit order (providing it) |
+| random slowdown | baseline random cancellations |
+| braking behind a slow car | withdrawal of liquidity behind a level that was just pulled |
+
+In our traffic simulation, more cars meant a fuller road whereas in the book, a higher load means thinner depth. Despite this, the two system share very little room for slack at their respective extremes.
+
+#### The coupling
+
+Much like how one car's speed is related to the speed of the car that's in front of it, we also need a way to link one level to the next or they would just be independent, giving us no propagation. For this, we can measure a $\text{stress}$ that is built up when a large amount of order volume at a price is cancelled. This $\text{stress}$ fades over time and is measured against the depth still resting there. We then multiply the cancel rate for the orders directly behind it by $1 + \gamma \cdot \text{stress}$. This is important because it allows us to single out cancellations as that solely represents someone abandoning a position that they were holding, whereas a fill is demand.
+
+Here, $\gamma$ is the coupling strength, the larger gamma is, the more strongly a cancellation spreads to the level behind it and $\gamma = 0$ indicates that the cancellations have no effect on each other at all.
+
+#### What counts as a transition
+
+We call it a transition if the average peak lagged correlation rises by at least 0.4 between low and high load, over a span of loads no wider than 20% of the range tested, and the control with $\gamma = 0$ (no coupling) does not rise above 0.20. These numbers are based on our findings from phase 1 and a pilot uncoupled book: 
+- the uncoupled book's correlation sat between 0.06 and 0.12, so 0.20 is clear of the noise but low enough that a higher value would point at the measurement and not the coupling;
+- the traffic rise was about 0.8 with a noise standard deviation of 0.015, so 0.4 is far above noise while allowing a weaker effect than traffic;
+- the traffic transition was 8% of its density range wide, so 20% would allow a softer transition but rules out a lazy slope.
+
+#### Limitations
+
+- The coupling is a rule we wrote. A transition would show that a detector can work *if* a market has this kind of propagation, not that real markets do, we wouldn't be able to know whether or not real order-book operate this way until we test it on actual data.
+- The load is a one-dimensional slice of a larger space (the cancel rate $\theta$ is held fixed), much like in our NaSch simulation where we fixed our slowdown probability.
+- Since the coupling rule makes orders cancel more when adjacent orders were just cancelled, a side effect of increasing $\gamma$ is that the book holds fewer orders overall. When we go to compare whether or not the coupling caused propagation, we will be comparing two things at once : the coupling and the amount of depth. 
