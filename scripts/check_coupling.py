@@ -20,7 +20,6 @@ LOADS = (0.1, 0.4, 0.7)
 GAMMAS = (0.0, 3.0)
 N_EVENTS = 40_000
 NB_RUNS = 5
-REFILL_SUPPRESSION = 0.0   # sigma: 0 = the original coupling only
 HORIZON = 50   # events; the same length as the stress memory and the measurement window
 SEED = 0
 
@@ -77,7 +76,7 @@ def main():
             rows, n_trig = [], []
             for r in range(NB_RUNS):
                 rng = np.random.default_rng(streams[(g * len(LOADS) + l) * NB_RUNS + r])
-                ratios, n = followups_per_cancellation(log_cancellations(LOBParams(market_rate=mu, coupling_strength=gamma, refill_suppression=REFILL_SUPPRESSION), rng))
+                ratios, n = followups_per_cancellation(log_cancellations(LOBParams(market_rate=mu, coupling_strength=gamma), rng))
                 rows.append([ratios['behind'], ratios['ahead'], ratios['two_behind']])
                 n_trig.append(n)
             rows = np.array(rows)

@@ -81,11 +81,11 @@ A single-asset limit order book with integer price ticks, a FIFO queue at each p
 | random slowdown | baseline random cancellations |
 | braking behind a slow car | withdrawal of liquidity behind a level that was just pulled |
 
-In our traffic simulation, more cars meant a fuller road whereas in the book, a higher load means thinner depth. Despite this, the two system share very little room for slack at their respective extremes.
+In our traffic simulation, more cars meant a fuller road whereas in the book, a higher load means thinner depth. Despite this, the two systems share very little room for slack at their respective extremes.
 
 #### The coupling
 
-Much like how one car's speed is related to the speed of the car that's in front of it, we also need a way to link one level to the next or they would just be independent, giving us no propagation. For this, we can measure a $\text{stress}$ that is built up when a large amount of order volume at a price is cancelled. This $\text{stress}$ fades over time and is measured against the depth still resting there. We then multiply the cancel rate for the orders directly behind it by $1 + \gamma \cdot \text{stress}$. This is important because it allows us to single out cancellations as that solely represents someone abandoning a position that they were holding, whereas a fill is demand.
+Much like how one car's speed is related to the speed of the car that's in front of it, we also need a way to link one level to the next or they would just be independent, giving us no propagation. For this, we can measure a $\text{stress}$ that is built up when a certain amount of order volume at a price is cancelled. This $\text{stress}$ fades over time and is measured against the depth still resting there. We then multiply the cancel rate for the orders directly behind it by $1 + \gamma \cdot \text{stress}$. This is important because it allows us to single out cancellations as that solely represents someone abandoning a position that they were holding, whereas a fill is demand.
 
 Here, $\gamma$ is the coupling strength, the larger gamma is, the more strongly a cancellation spreads to the level behind it and $\gamma = 0$ indicates that the cancellations have no effect on each other at all.
 
@@ -96,8 +96,40 @@ We call it a transition if the average peak lagged correlation rises by at least
 - the traffic rise was about 0.8 with a noise standard deviation of 0.015, so 0.4 is far above noise while allowing a weaker effect than traffic;
 - the traffic transition was 8% of its density range wide, so 20% would allow a softer transition but rules out a lazy slope.
 
+#### Results
+
+Under the rules we wrote, for there to be a transition, the average peak lagged correlation should rise by at least 0.4. The order book sweeping with $\gamma = 3$ and $\gamma = 10$ did not show this level of transition despite the control passing.
+
+What's important to note is that our instrument is trust-worthy. It detects a cascading effect when there is one, it respects the direction that we had encoded (level 0 = touch, position k is the frontier position on each side and k+1 is the tick behind it).
+
+We sweeped 16 loads(0.05 to 0.80), 20 runs each, 40000 events (with the first 5000 dropped), with levels from 0-4 and lags from 0-9 windows.
+
+Here are the results :
+
+| | Low plateau ($\rho<=0.20$) | High plateau ($\rho>=0.60$) | Rise | Max |
+|---|---|---|---|---|
+| $\gamma = 0$ (control) | 0.072 | 0.092 | +0.020 | 0.104 |
+| $\gamma = 3$ | 0.099 | 0.132 | +0.033 | 0.140 |
+| $\gamma = 10$ | 0.126 | 0.154 | +0.028 | 0.165 |
+
+![LOB sweeping results](graphs/lob_sweep_results.png)
+
+The rises are well below the requires +0.40. The largest step between adjacent loads is +0.016, whereas in our traffic simulation we found 0.3-0.4 per step. The curves increases very slightly before quickly plateau-ing.
+
+To understand why this happen, we counted cancellations directly. After a cancellation, the number of further cancellations at the tick behind it within a 50 events window would allow us to determine whether the cascade is self-sustained or whether it degenerates before the measurement can properly capture anything. In our case, the coupling rule only adds about 0.1 to 0.36 extra cancellations per cancellation to our control uncoupled book. For a cascading effect to be self-sustained, we could expect at least 1 cancellation per 50 event windows for the cascading effect to be sustained.
+
+Now this could also mean that we just need to increase the coupling strength $\gamma$ which would hopefully generate more cancellations per cancellation. However, running simulations with $\gamma = 30$, $\gamma = 100$ and $\gamma = 1000$ shows not only is the increase in number of cancellations per cancellation roughly logarithmic relative to $\gamma$ but, even with $\gamma = 1000$ we peak at +0.550 compared to our control uncoupled book, still well below the +1 we'd like to see. Do note that we only checked these $\gamma$ at the event level, we did not sweep through loads with these values. 
+
+We also chose to exclude windows where either side of the book is empty at the start or at the end, since for those windows the touch is undefined. At load 0.8, this removes 17%, 34% and 46% for $\gamma$ = 0, 3 and 10 respectively. 
+
 #### Limitations
 
 - The coupling is a rule we wrote. A transition would show that a detector can work *if* a market has this kind of propagation, not that real markets do, we wouldn't be able to know whether or not real order-book operate this way until we test it on actual data.
-- The load is a one-dimensional slice of a larger space (the cancel rate $\theta$ is held fixed), much like in our NaSch simulation where we fixed our slowdown probability.
-- Since the coupling rule makes orders cancel more when adjacent orders were just cancelled, a side effect of increasing $\gamma$ is that the book holds fewer orders overall. When we go to compare whether or not the coupling caused propagation, we will be comparing two things at once : the coupling and the amount of depth. 
+- We only tested one response mechanism : an order cancellation causes other orders to cancel, so in our order book model, the null applies to only this one mechanism, we'd need to test other forms of response mechanism to see whether or not this applies to them as well.
+- Our order-book model itself is beyond simplistic : memory-less symmetric Poisson order flow, a drift-less random-walk price, event time instead of clock time, a single asset, and subjective measurement choices (5 levels, 50-event windows), though this last one is also limited by compute time.
+- Excluded windows are the thin ones, the highly stressed ones, so at high load the curves describe calmer moments and a transition concentrated in the excluded moments would be missed. This design choice was however necessary as the current design model does not know how to properly handle situations where the touch is empty.
+- Coupling also thins the book (as cancellations are more frequent). To be more precise, it is roughly 30%-70% thinner than the control's volume, so a gap between coupled and control is caused both by propagation but also by the difference in depth.
+
+## Possible pursuits
+
+The original idea behind this project after building the lagged-correlation measurement for our traffic system was to see whether or not we can exploit this mechanism for early detection of disruptions in a financial order book. My desire to see whether or not this would hold still exists but unfortunately my model did not reproduce the transition effect, and due to the simplistic nature of my model, I can not tell if it is because the model is too simple or because the effect is absent. The only way to truly know if this is possible is to apply the methods directly to real-data order books, but that would imply working with a much more complex multi-asset, clock time based system... definitely a task for the upcoming future!

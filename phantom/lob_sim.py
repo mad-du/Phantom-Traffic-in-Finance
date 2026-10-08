@@ -18,7 +18,6 @@ class LOBParams:
     n_snapshot_levels: int = 5  # depth is recorded for this many levels counted from the touch
     coupling_strength: float = 0.0  # gamma: how strongly recent cancellations one tick ahead raise an order's cancel hazard (0 = no coupling)
     stress_memory: float = 50.0     # T: time constant (in events) over which a cancellation's effect fades; tied to the window W = 50
-    refill_suppression: float = 0.0  # sigma: how strongly recent cancellations at a tick discourage NEW limit orders there (0 = off; needs coupling_strength > 0)
 
 
 def sample_event_type(book, params, rng):
@@ -152,31 +151,6 @@ def pick_cancel_target(book, total_weight, groups, rng):
     return int(rng.choice(list(book.orders)))  # floating-point leftover
 
 
-def adjust_for_stress(book, tracker, side, price, params, rng, t):
-    """Decide what a stressed tick does to a new limit order that was about to be posted at `price`.
-
-    Called only when params.refill_suppression (sigma) > 0. The idea: liquidity providers avoid posting where
-    others have just pulled, so a recently stressed tick is refilled less, which stops the cascade from being
-    undone by refills.
-
-    book:    the OrderBook.   side: 'buy' or 'sell'.   price: the tick the order was going to be posted at.
-    tracker: StressTracker; tracker.stress(book, side, price, t) is the stress at a tick, in [0, 1)
-             (recent cancelled volume relative to the depth still resting there; 0 if none).
-    params.refill_suppression: sigma >= 0.   rng: numpy Generator.   t: current event index.
-
-    Returns: the price at which to post the order (it may differ from `price`), or None to skip this order.
-    """
-    # Design (chosen with the user): SKIP the order with probability min(1, sigma * stress), where the stress is read at
-    # the tick AHEAD of the post (price + 1 for a buy, price - 1 for a sell). That is the same tick relation the cancel
-    # rule uses (hazard_multiplier), so a tick behind a recently pulled tick gets a higher cancel hazard on its resting
-    # orders AND fewer new posts. Skipped volume leaves the system (a provider who stops quoting), not redirected.
-    ahead = price + 1 if side == 'buy' else price - 1
-    p_skip = min(1.0, params.refill_suppression * tracker.stress(book, side, ahead, t))
-    if p_skip > 0 and rng.random() < p_skip:
-        return None
-    return price
-
-
 def simulate_lob(n_events, params, rng):
     """Run the book for n_events events (one event = one time step) and record its state after each one.
 
@@ -190,7 +164,6 @@ def simulate_lob(n_events, params, rng):
         event_type (n,)          0 = limit, 1 = market, 2 = cancel
         best_bid, best_ask (n,)  NaN while that side is empty
         bid_depth, ask_depth (n, n_snapshot_levels)
-        n_skipped (int)          limit orders skipped by refill suppression (always 0 when params.refill_suppression is 0)
     """
     book = OrderBook()
     for k in range(1, params.init_levels + 1):
@@ -204,7 +177,6 @@ def simulate_lob(n_events, params, rng):
     last_mid = float(params.mid0)
     coupled = params.coupling_strength > 0
     tracker = StressTracker(params.stress_memory) if coupled else None
-    n_skipped = 0  # limit orders not posted because of refill suppression (the effective lambda is lower by this much)
 
     for t in range(n_events):
         if coupled:
@@ -217,13 +189,7 @@ def simulate_lob(n_events, params, rng):
 
         if kind == 'limit':
             offset = int(rng.geometric(1 / (1 + params.mean_offset))) - 1  # >= 0, mean = mean_offset
-            price = placement_price(book, side, offset, last_mid)
-            if coupled and params.refill_suppression > 0:  # stressed ticks are refilled less; None = skip this order
-                price = adjust_for_stress(book, tracker, side, price, params, rng, t)
-            if price is not None:
-                book.add_limit_order(side, price, size)
-            else:
-                n_skipped += 1
+            book.add_limit_order(side, placement_price(book, side, offset, last_mid), size)
         elif kind == 'market':
             book.match_market_order(side, size)
         elif book.orders:  # cancel a resting order
@@ -247,5 +213,4 @@ def simulate_lob(n_events, params, rng):
         bid_depth[t] = depth_profile(book, 'buy', K)
         ask_depth[t] = depth_profile(book, 'sell', K)
 
-    return dict(event_type=event_type, best_bid=best_bid, best_ask=best_ask, bid_depth=bid_depth, ask_depth=ask_depth,
-                n_skipped=n_skipped)
+    return dict(event_type=event_type, best_bid=best_bid, best_ask=best_ask, bid_depth=bid_depth, ask_depth=ask_depth)

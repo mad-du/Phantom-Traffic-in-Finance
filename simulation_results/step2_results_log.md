@@ -1,7 +1,7 @@
 # Step 2 results log: does the order book show a critical load?
 
 Working notes for writing the README. Numbers are copied from actual runs; nothing here is estimated.
-Branch: `lob-simulator`. Last updated 2026-10-07. Status: **FINAL for Step 2: negative at gamma = 3 and gamma = 10 under the README success rule (Results 1 and 3); event-level check shows the coupling is real but weak (Result 2); the one planned redesign (refill suppression) failed its gate, so no further attempts.**
+Branch: `lob-simulator`. Last updated 2026-10-08. Status: **FINAL for Step 2: negative at gamma = 3 and gamma = 10 under the README success rule (Results 1 and 3); the event-level check shows the coupling is real but weak, and it grows only slowly with gamma (Results 2 and 2b).**
 
 ## Setup (common to the runs below)
 
@@ -77,6 +77,37 @@ Extra cancellations behind a cancellation caused by the coupling (behind minus t
 | 0.40 | +0.114 | +0.146 |
 | 0.70 | +0.229 | +0.361 |
 
+## Result 2b: much larger gamma at the event level (exploratory, run after the fact, 2026-10-08)
+
+Same check as Result 2 (`scripts/check_coupling.py`, 5 runs per point, seed 0), loads 0.4 and 0.7 only. This was run to answer
+"does increasing gamma eventually reach a cascade?". The README success rule is unchanged, and no load sweep was run at these values.
+
+| load | gamma | behind | ahead | two behind | extra behind vs gamma = 0 |
+|---|---|---|---|---|---|
+| 0.40 | 0 (ref.) | 0.959 | 0.922 | 0.715 | - |
+| 0.40 | 3 | 1.073 | 0.812 | 0.726 | +0.114 |
+| 0.40 | 10 | 1.105 | 0.805 | 0.747 | +0.146 |
+| 0.40 | 30 | 1.075 | 0.857 | 0.714 | +0.116 |
+| 0.40 | 100 | 1.086 | 0.944 | 0.709 | +0.127 |
+| 0.40 | 1000 | 1.126 | 1.049 | 0.739 | +0.167 |
+| 0.70 | 0 (ref.) | 0.442 | 0.418 | 0.363 | - |
+| 0.70 | 3 | 0.671 | 0.442 | 0.444 | +0.229 |
+| 0.70 | 10 | 0.803 | 0.524 | 0.522 | +0.361 |
+| 0.70 | 30 | 0.864 | 0.598 | 0.564 | +0.422 |
+| 0.70 | 100 | 0.929 | 0.709 | 0.590 | +0.487 |
+| 0.70 | 1000 | 0.992 | 0.844 | 0.642 | +0.550 |
+
+- The extra follow-ups keep growing with gamma but slowly: at load 0.7 each tenfold increase adds about +0.13 (10 to 100) and +0.06
+  (100 to 1000). At gamma = 1000 (cancel hazard up to about 1000 times the baseline, orders vanish almost at once) the extra is
+  +0.55, still below the rough yardstick of 1. At load 0.4 it is only +0.17.
+- Directionality blurs at large gamma: the tick AHEAD also gains (0.418 to 0.844 at load 0.7, gamma 1000), so part of the rise is
+  cancellations clustering in time across neighbouring ticks, not only the designed backward push. The raw "behind" count of
+  0.992 should not be read as "reached 1": the quantity of interest is the extra over gamma = 0.
+- Not tested: whether the correlation sweep would show a transition at these gammas (only gamma = 0, 3, 10 were swept).
+- Counting caveat (applies to all event-level numbers): a follow-up cancellation is credited to every cancellation in the 50
+  events before it at the neighbouring tick, so the quantity is an excess follow-up rate per cancellation, not a literal branching
+  ratio, and the critical value is not exactly 1.
+
 ## Result 3: load sweep, gamma = 10 (`data/lob_sweep_gamma10.npz`, seed 1, independent of Result 1's streams)
 
 Same settings as Result 1 (16 loads, 20 runs, 40,000 events). gamma = 0 and gamma = 3 columns are copied from Result 1.
@@ -108,7 +139,7 @@ Same settings as Result 1 (16 loads, 20 runs, 40,000 events). gamma = 0 and gamm
 
 - **Transition condition fails again**: rise +0.028, 7% of the required +0.40. Largest step between adjacent loads +0.016 (loads 0.20 to 0.25).
 - The curve climbs from 0.109 to about 0.165 by load 0.35 and then flattens (0.15 to 0.16): a plateau, not a threshold.
-- gamma = 10 is 0.040 to 0.073 above the control, and 0.011 to 0.055 above gamma = 3. Raising gamma from 3 to 10 buys little, consistent with the event-level saturation in Result 2.
+- gamma = 10 is 0.040 to 0.073 above the control, and 0.011 to 0.055 above gamma = 3. Raising gamma from 3 to 10 buys little, consistent with the diminishing returns at the event level (Results 2 and 2b).
 - Depth is still about half of the control (ratio 0.46 at load 0.05, 0.55 at load 0.80), so the confound persists.
 - **The measured sample shrinks sharply at high load**: dropped windows pass 20% at load 0.40 and reach 45.5% at load 0.80. The upper half of this curve rests on a heavily filtered sample, so it should be read with that caveat.
 
@@ -116,59 +147,22 @@ Same settings as Result 1 (16 loads, 20 runs, 40,000 events). gamma = 0 and gamm
 
 - Supported: the coupling works as designed at the event level. Cancellations are followed by more cancellations on the tick
   behind it than the control, the effect is larger at high load (thin book), and it is directional (the tick ahead does not gain).
-- Supported: the effect is far too weak to cascade. A cascade needs roughly one extra cancellation per cancellation; the
-  coupling adds 0.1 to 0.36 per cancellation within 50 events, and gamma = 10 adds little over gamma = 3 (it saturates).
-- Plausible but NOT tested: saturation happens because a tick holds only a few orders; once they are cancelled there is nothing
-  left to cancel until limit orders refill it. The raw counts also compare books of different depth, which pushes the measured
-  excess downward, so it is somewhat understated.
+- Supported: the effect is far too weak to cascade at the strengths tried in the sweeps. As a rough yardstick (not an exact
+  threshold, see the counting caveat in Result 2b) a self-sustaining cascade needs about one extra cancellation per cancellation;
+  the coupling adds 0.1 to 0.36 within 50 events at gamma = 3 and 10.
+- CORRECTION (2026-10-08): an earlier version of this log said the effect "saturates" between gamma = 3 and 10. That was
+  based on two points. With larger gamma (Result 2b) it keeps growing, but with strongly diminishing returns, roughly
+  logarithmic in gamma: at load 0.7 the extra follow-ups reach +0.55 at gamma = 1000, not 1.
+- Plausible but NOT tested: the diminishing returns arise because a tick holds only a few orders; once the hazard is high enough
+  to remove them within the 50-event horizon, a larger gamma only speeds the removal up. The raw counts also compare books of
+  different depth, which pushes the measured excess downward, so it is somewhat understated.
 - Not shown: that no coupling of this general kind could produce a transition. Only this rule, at gamma = 3 (sweep) and
   gamma = 3, 10 (event level), has been tried.
 
 ## Pending
 
-- Decision taken (2026-10-07): ONE redesign attempt, refill suppression (sigma, `refill_suppression` in `LOBParams`, hook
-  `adjust_for_stress` in `phantom/lob_sim.py`). sigma = 0 reproduces the earlier generator bit for bit.
-
-## Redesign attempt: rules fixed before running
-
-- **Gate (cheap, ~1 minute):** `scripts/check_coupling.py` at load 0.7. The extra cancellations behind a cancellation
-  (value minus the gamma = 0 value of 0.442) must reach **at least 0.5**, for at least one of the two settings below.
-  For reference, the earlier coupling gave +0.229 (gamma = 3) and +0.361 (gamma = 10).
-- **Settings tried, fixed in advance:** (gamma = 3, sigma = 1) and (gamma = 3, sigma = 5). No other values.
-- **If the gate passes:** run the full load sweep once with the passing setting (same 16 loads, 20 runs, 40,000 events) and
-  judge it with the unchanged README success rule.
-- **If the gate fails for both settings:** stop. The null result is the finding, and the write-up says the coupling was
-  also tried with refill suppression.
-- **No further redesigns after this one.**
-
-## Redesign attempt: gate result (FAILED, so no sweep was run)
-
-Design as implemented (`adjust_for_stress`): a new limit order is SKIPPED with probability min(1, sigma * stress), with the
-stress read at the tick AHEAD of the post (same tick relation as the cancel rule). Skipped volume leaves the system.
-Checked on planted books first: skip rate matched sigma * stress (0.748 vs 0.75; 0.367 vs 0.375), ignored the target tick's own
-stress, worked on both sides, and sigma = 0 stayed bit-identical to the earlier generator.
-
-Event-level gate (`scripts/check_coupling.py`, gamma = 3, 5 runs per point, seed 0): cancellations within 50 events after a
-cancellation, at the tick behind it.
-
-| load | no suppression (gamma = 3) | sigma = 1 | sigma = 5 | gamma = 0 reference |
-|---|---|---|---|---|
-| 0.10 | 1.652 | 1.295 | 0.207 | 1.537 |
-| 0.40 | 1.073 | 0.757 | 0.471 | 0.959 |
-| 0.70 | 0.671 | 0.442 | 0.325 | 0.442 |
-
-- Gate: extra cancellations behind at load 0.7 (value minus the gamma = 0 value of 0.442) must be at least 0.5, i.e. at least 0.942.
-- **Measured: sigma = 1 gives 0.442 (extra 0.000), sigma = 5 gives 0.325 (extra -0.117). Both fail by a wide margin.**
-- Refill suppression REDUCED follow-up cancellations (from +0.229 without it to about 0 or negative). Triggering cancellations per run also fell
-  (7,615 without suppression to 4,438 at sigma = 1 and 4,060 at sigma = 5, load 0.7).
-- Skipped fraction of limit orders (20,000-event runs, gamma = 3): sigma = 1: 34.8% at load 0.1, 26.4% at 0.7; sigma = 5: 45.3% at 0.1, 26.1% at 0.7.
-  So the effective lambda is 55% to 74% of nominal, and the nominal load axis understates the real one.
-- Likely mechanism (interpretation, not separately tested): with this design the same tick receives a higher cancel hazard
-  AND fewer new posts. Pressure goes up, but the supply of orders to cancel there goes down, and supply wins. At sigma = 5, load 0.1,
-  the tick behind has 0.207 follow-ups while the tick two behind has 0.827: the tick next to the stress is starved, the next one is not.
-- Caveat: raw counts compare books of different depth, and the suppressed book is thinner, which lowers counts mechanically. A count
-  normalised by resting orders would separate the two effects; it was not part of this attempt.
-- Per the rule fixed in advance: **stop**. The null result stands and the write-up should say refill suppression was also tried.
+- Open follow-up, not run: the correlation sweep at much larger gamma (for example 100). Only gamma = 0, 3 and 10 were swept;
+  Result 2b suggests the event-level effect keeps growing slowly with gamma.
 
 ## Figure
 
