@@ -69,7 +69,7 @@ Phase 1 gave us a tipping point: below $\rho_c$ cars barely influence one anothe
 
 #### The simulated order book
 
-A single-asset limit order book with integer price ticks, a FIFO queue at each price (price-time priority), and limit, market and cancel orders. Every operation re-checks the book's invariants (no crossed book, no empty price levels, volume conserved), and the matching engine is tested against a deliberately naive reference implementation on thousands of random events. Events arrive at random: limit orders at rate $\lambda$, market orders at rate $\mu$, and each resting order is cancelled at rate $\theta$.
+A single-asset limit order book with integer price ticks, a FIFO queue at each price (price-time priority), and limit, market and cancel orders. After every operation, we check the book's invariants (no crossed book, no empty price levels, volume conserved), and the matching engine is tested against a deliberately naive reference implementation on thousands of random events. Events arrive at random: limit orders at rate $\lambda$, market orders at rate $\mu$, and each resting order is cancelled at rate $\theta$.
 
 #### Mapping traffic onto the order book
 
@@ -85,7 +85,7 @@ In our traffic simulation, more cars meant a fuller road whereas in the book, a 
 
 #### The coupling
 
-Much like how one car's speed is related to the speed of the car that's in front of it, we also need a way to link one level to the next or they would just be independent, giving us no propagation. For this, we can measure a $\text{stress}$ that is built up when a certain amount of order volume at a price is cancelled. This $\text{stress}$ fades over time and is measured against the depth still resting there. We then multiply the cancel rate for the orders directly behind it by $1 + \gamma \cdot \text{stress}$. This is important because it allows us to single out cancellations as that solely represents someone abandoning a position that they were holding, whereas a fill is demand.
+Much like how one car's speed is related to the speed of the car that's in front of it, we also need a way to link one level to the next, or they would just be independent, giving us no propagation. For this, we can measure a $\text{stress}$ that is built up when a certain amount of order volume at a price is cancelled. This $\text{stress}$ fades over time and is measured against the depth still resting there. We then multiply the cancel rate for the orders directly behind it by $1 + \gamma \cdot \text{stress}$. This is important because it allows us to single out cancellations as that solely represents someone abandoning a position that they were holding, whereas a fill is demand.
 
 Here, $\gamma$ is the coupling strength, the larger gamma is, the more strongly a cancellation spreads to the level behind it and $\gamma = 0$ indicates that the cancellations have no effect on each other at all.
 
@@ -100,9 +100,9 @@ We call it a transition if the average peak lagged correlation rises by at least
 
 Under the rules we wrote, for there to be a transition, the average peak lagged correlation should rise by at least 0.4. The order book sweeping with $\gamma = 3$ and $\gamma = 10$ did not show this level of transition despite the control passing.
 
-What's important to note is that our instrument is trust-worthy. It detects a cascading effect when there is one, it respects the direction that we had encoded (level 0 = touch, position k is the frontier position on each side and k+1 is the tick behind it).
+What's important to note is that our instrument is trustworthy. It detects a cascading effect when there is one, it respects the direction that we had encoded (level 0 = touch, position k is the frontier position on each side and k+1 is the tick behind it).
 
-We sweeped 16 loads(0.05 to 0.80), 20 runs each, 40000 events (with the first 5000 dropped), with levels from 0-4 and lags from 0-9 windows.
+We swept 16 loads(0.05 to 0.80), 20 runs each, 40000 events (with the first 5000 dropped), with levels from 0-4 and lags from 0-9 windows.
 
 Here are the results :
 
@@ -114,9 +114,9 @@ Here are the results :
 
 ![LOB sweeping results](graphs/lob_sweep_results.png)
 
-The rises are well below the requires +0.40. The largest step between adjacent loads is +0.016, whereas in our traffic simulation we found 0.3-0.4 per step. The curves increases very slightly before quickly plateau-ing.
+The rises are well below the required +0.40. The largest step between adjacent loads is +0.016, whereas in our traffic simulation we found 0.3-0.4 per step. The curves increase very slightly before quickly reach a plateau.
 
-To understand why this happen, we counted cancellations directly. After a cancellation, the number of further cancellations at the tick behind it within a 50 events window would allow us to determine whether the cascade is self-sustained or whether it degenerates before the measurement can properly capture anything. In our case, the coupling rule only adds about 0.1 to 0.36 extra cancellations per cancellation to our control uncoupled book. For a cascading effect to be self-sustained, we could expect at least 1 cancellation per 50 event windows for the cascading effect to be sustained.
+To understand why this happened, we counted cancellations directly. After a cancellation, the number of further cancellations at the tick behind it within a 50 events window would allow us to determine whether the cascade is self-sustained or whether it degenerates before the measurement can properly capture anything. In our case, the coupling rule only adds about 0.1 to 0.36 extra cancellations per cancellation to our control uncoupled book. For a cascading effect to be self-sustained, we could expect at least 1 cancellation per 50 event windows for the cascading effect to be sustained.
 
 Now this could also mean that we just need to increase the coupling strength $\gamma$ which would hopefully generate more cancellations per cancellation. However, running simulations with $\gamma = 30$, $\gamma = 100$ and $\gamma = 1000$ shows not only is the increase in number of cancellations per cancellation roughly logarithmic relative to $\gamma$ but, even with $\gamma = 1000$ we peak at +0.550 compared to our control uncoupled book, still well below the +1 we'd like to see. Do note that we only checked these $\gamma$ at the event level, we did not sweep through loads with these values. 
 
